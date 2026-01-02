@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>猛健樂與代謝知識專業測驗</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 答對且選中：綠色 */
+        .correct-opt {
+            background-color: #dcfce7 !important;
+            border-color: #22c55e !important;
+            color: #166534 !important;
+            font-weight: 600;
+        }
+        /* 正解但漏選：黃色 */
+        .missing-opt {
+            background-color: #fef9c3 !important;
+            border-color: #eab308 !important;
+            color: #854d0e !important;
+            font-weight: 600;
+        }
+        /* 選錯：紅色 */
+        .wrong-opt {
+            background-color: #fee2e2 !important;
+            border-color: #ef4444 !important;
+            color: #991b1b !important;
+        }
+        .option-label {
+            transition: all 0.2s ease;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen py-8 px-4">
+    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
+        <!-- 標題欄 -->
+        <div class="bg-blue-600 p-8 text-white text-center">
+            <h1 class="text-3xl font-bold">💉 猛健樂與代謝知識專業測驗</h1>
+            <p class="mt-2 text-blue-100 opacity-90">隨機抽考 10 題 (3計算+3單選+2多選+2是非)</p>
+        </div>
+
+        <div class="p-6 md:p-10">
+            <!-- 載入中狀態 -->
+            <div id="loading" class="text-center py-20 text-slate-500">
+                <div class="animate-spin inline-block w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full mb-4"></div>
+                <p class="text-lg">正在讀取題庫資料...</p>
+            </div>
+
+            <!-- 分數顯示區 -->
+            <div id="result-area" class="hidden mb-10 p-8 bg-blue-50 rounded-2xl text-center border-2 border-blue-100 shadow-inner">
+                <div class="text-6xl font-black text-blue-600 mb-2" id="final-score">0</div>
+                <div class="text-xl font-bold text-blue-800" id="score-comment"></div>
+            </div>
+
+            <!-- 題目流 -->
+            <div id="quiz-flow" class="space-y-10"></div>
+
+            <!-- 控制按鈕 -->
+            <div class="mt-12 flex flex-col sm:flex-row gap-4">
+                <button id="submit-btn" onclick="checkAnswers()" class="hidden w-full py-5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-xl shadow-lg transition-all active:scale-95">
+                    提交測驗並查看詳解
+                </button>
+                <button id="restart-btn" onclick="startTest()" class="hidden w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg rounded-xl shadow-lg transition-all active:scale-95">
+                    重新抽取題目
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let database = [];
+        let currentTest = [];
+
+        async function init() {
+            try {
+                const res = await fetch('questions.json');
+                if (!res.ok) throw new Error('找不到 questions.json 檔案');
+                database = await res.json();
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('submit-btn').classList.remove('hidden');
+                startTest();
+            } catch (e) {
+                document.getElementById('loading').innerHTML = `
+                    <div class="text-red-500 p-6 bg-red-50 rounded-xl">
+                        <p class="text-xl font-bold">❌ 載入失敗</p>
+                        <p class="mt-2 text-sm">${e.message}</p>
+                        <p class="mt-4 text-slate-500">請確認 questions.json 檔案與此網頁放在同一個路徑，並使用伺服器環境開啟。</p>
+                    </div>`;
+            }
+        }
+
+        function startTest() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            document.getElementById('result-area').classList.add('hidden');
+            document.getElementById('submit-btn').classList.remove('hidden');
+            document.getElementById('restart-btn').classList.add('hidden');
+            
+            const math = sample(database.filter(q => q.category === 'math'), 3);
+            const single = sample(database.filter(q => q.category === 'single'), 3);
+            const multi = sample(database.filter(q => q.category === 'multi'), 2);
+            const tf = sample(database.filter(q => q.category === 'tf'), 2);
+            
+            currentTest = [...math, ...single, ...multi, ...tf].sort(() => 0.5 - Math.random());
+            renderQuestions();
+        }
+
+        function sample(array, n) {
+            const shuffled = [...array].sort(() => 0.5 - Math.random());
+            return shuffled.slice(0, Math.min(n, shuffled.length));
+        }
+
+        function renderQuestions() {
+            const flow = document.getElementById('quiz-flow');
+            flow.innerHTML = '';
+            
+            currentTest.forEach((q, i) => {
+                const typeLabel = { math: '🧮 計算題', single: '🔘 單選題', multi: '☑️ 多選題', tf: '⚖️ 是非題' }[q.category];
+                
+                const badgeColors = {
+                    math: 'bg-amber-100 text-amber-700 border-amber-200',
+                    single: 'bg-blue-100 text-blue-700 border-blue-200',
+                    multi: 'bg-purple-100 text-purple-700 border-purple-200',
+                    tf: 'bg-slate-100 text-slate-700 border-slate-200'
+                }[q.category] || 'bg-indigo-50 text-indigo-600 border-indigo-200';
+
+                const card = document.createElement('div');
+                card.className = "bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm transition-all";
+                
+                card.innerHTML = `
+                    <div class="flex items-center gap-4 mb-6">
+                        <span class="text-2xl font-black text-slate-300">#${i+1}</span>
+                        <span class="px-4 py-1.5 ${badgeColors} text-sm font-black rounded-lg border-2 shadow-sm uppercase tracking-wide">
+                            ${typeLabel}
+                        </span>
+                    </div>
+                    <div class="text-xl font-bold text-slate-800 mb-8 leading-relaxed">${q.q}</div>
+                    <div class="space-y-4" id="opt-container-${i}"></div>
+                    <div id="exp-${i}" class="hidden mt-8 p-6 bg-blue-50 border-l-8 border-blue-400 rounded-r-2xl">
+                        <div class="text-emerald-700 font-bold text-lg mb-3">正確答案：${q.answer.map(idx => q.options[idx]).join('、')}</div>
+                        <div class="text-slate-700 leading-relaxed"><strong class="text-blue-700">【科普小知識】</strong><br>${q.rationale}</div>
+                    </div>
+                `;
+                
+                const optBox = card.querySelector(`#opt-container-${i}`);
+                q.options.forEach((opt, idx) => {
+                    const type = q.category === 'multi' ? 'checkbox' : 'radio';
+                    const label = document.createElement('label');
+                    label.className = "option-label flex items-center p-4 border-2 border-slate-100 rounded-xl cursor-pointer hover:bg-slate-50 hover:border-blue-200 group";
+                    label.innerHTML = `
+                        <input type="${type}" name="q${i}" value="${idx}" class="w-6 h-6 text-blue-600 border-slate-300 focus:ring-blue-500 rounded">
+                        <span class="ml-4 text-slate-700 font-medium text-lg">${opt}</span>
+                    `;
+                    optBox.appendChild(label);
+                });
+                
+                flow.appendChild(card);
+            });
+        }
+
+        function checkAnswers() {
+            let score = 0;
+            currentTest.forEach((q, i) => {
+                const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+                const checkedIndices = Array.from(inputs).filter(input => input.checked).map(input => parseInt(input.value));
+                
+                const isCorrect = checkedIndices.length === q.answer.length && checkedIndices.every(v => q.answer.includes(v));
+                if (isCorrect) score++;
+
+                inputs.forEach((input, idx) => {
+                    const label = input.parentElement;
+                    const isRightAnswer = q.answer.includes(idx);
+                    const isUserChecked = input.checked;
+
+                    if (isRightAnswer && isUserChecked) {
+                        // 正解且選中：綠色
+                        label.classList.add('correct-opt');
+                        label.innerHTML += '<span class="ml-auto font-bold text-xl">✅</span>';
+                    } else if (isRightAnswer && !isUserChecked) {
+                        // 正解但漏選：黃色
+                        label.classList.add('missing-opt');
+                        label.innerHTML += '<span class="ml-auto font-bold text-xl">⚠️</span>';
+                    } else if (!isRightAnswer && isUserChecked) {
+                        // 選錯：紅色
+                        label.classList.add('wrong-opt');
+                        label.innerHTML += '<span class="ml-auto font-bold text-xl">❌</span>';
+                    }
+                    
+                    input.disabled = true;
+                });
+
+                document.getElementById(`exp-${i}`).classList.remove('hidden');
+            });
+
+            document.getElementById('final-score').innerText = `${score * 10} / 100`;
+            document.getElementById('score-comment').innerText = score >= 8 ? "優秀！你對猛健樂與代謝知識非常熟悉！" : "再接再厲，多閱讀解析內容能幫助您學習喔！";
+            
+            document.getElementById('result-area').classList.remove('hidden');
+            document.getElementById('submit-btn').classList.add('hidden');
+            document.getElementById('restart-btn').classList.remove('hidden');
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        init();
+    </script>
+</body>
+</html>
